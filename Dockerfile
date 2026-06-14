@@ -49,4 +49,4 @@ ENV MODEL_PATH=weights/yolov8n.pt
 ENV PYTHONPATH=/app
 
 # Start the uvicorn application
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
