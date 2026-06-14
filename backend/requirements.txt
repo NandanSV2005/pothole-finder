@@ -1,0 +1,14 @@
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+sqlalchemy>=2.0.0
+geopy>=2.3.0
+reportlab>=4.0.0
+ultralytics>=8.0.0
+opencv-python>=4.7.0.0
+torch
+torchvision
+python-multipart>=0.0.6
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0

@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  road-damage-system:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: road_damage_detection_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - data_storage:/app/backend/data
+      - weights_storage:/app/weights
+    environment:
+      - DATABASE_URL=sqlite:///./backend/pothole_detector.db
+      - JWT_SECRET=supersecretjwtkeyforpotholedetectordev-change-me-in-production
+      - CONFIDENCE_THRESHOLD=0.4
+      - PORT=8000
+    restart: always
+
+volumes:
+  data_storage:
+  weights_storage:

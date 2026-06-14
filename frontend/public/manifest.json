@@ -1,0 +1,16 @@
+{
+  "short_name": "RoadSense",
+  "name": "RoadSense Civic Road Monitoring Portal",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#080b11",
+  "theme_color": "#0c1017",
+  "display": "standalone",
+  "orientation": "portrait"
+}
