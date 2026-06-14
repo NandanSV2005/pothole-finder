@@ -1,30 +1,30 @@
 # Node / Frontend
-**/node_modules/
-**/dist/
-**/.svelte-kit/
-**/.next/
-**/.nuxt/
+node_modules
+dist
+.svelte-kit
+.next
+.nuxt
 
 # Python / Backend
-**/venv/
-**/.venv/
-**/__pycache__/
-**/*.py[cod]
-**/*.pyo
-**/*.pyd
-**/.pytest_cache/
+venv
+.venv
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache
 
 # Databases
-**/*.db
-**/*.sqlite
+*.db
+*.sqlite
 
 # Local Environment Variables & IDEs
-**/.env
-**/.env.local
-**/.vscode/
-**/.idea/
-**/.git/
-**/.github/
+.env
+.env.local
+.vscode
+.idea
+.git
+.github
 
 # Uploads & Temp
 backend/data/uploads/*
