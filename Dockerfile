@@ -32,14 +32,11 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy backend application source
 COPY backend/ ./backend/
 
-# Copy pre-downloaded weights
-COPY weights/ ./weights/
-
 # Copy compiled frontend from Stage 1 into the project folder
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Create weights folder and data uploads folder
-RUN mkdir -p weights backend/data/uploads
+# Create weights folder and data uploads folder, and grant write permissions to non-root containers
+RUN mkdir -p weights backend/data/uploads && chmod -R 777 weights backend/data/uploads
 
 # Expose port (7860 is default for Hugging Face Spaces, 8000 for local)
 EXPOSE 8000

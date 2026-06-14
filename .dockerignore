@@ -35,10 +35,9 @@ backend/data/uploads/*
 !backend/data/uploads/seeded_*
 data
 
-# Model weights (uncomment if you want to force download at runtime, 
-# but keeping them included makes the deployment self-contained and fast)
-# weights
-# *.pt
+# Local model artifacts are downloaded or mounted at runtime
+weights
+*.pt
 
 # Logs and temporary files
 *.log
