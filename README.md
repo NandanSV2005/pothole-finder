@@ -1,3 +1,12 @@
+---
+title: RoadSense
+emoji: 🛣️
+colorFrom: blue
+colorTo: red
+sdk: docker
+pinned: false
+---
+
 # RoadSense: Pothole & Road Damage Detection System
 
 RoadSense is a production-ready, full-stack civic technology application designed to detect, classify, log, and map road anomalies (potholes, cracks, waterlogging, and road collapses) across Bengaluru. It features a YOLOv8-powered ML pipeline, a FastAPI backend with SQLite database tracking, and a premium React Leaflet map dashboard for municipal analytics and citizens report filing.
