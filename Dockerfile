@@ -43,7 +43,7 @@ EXPOSE 8000
 
 # Set environment variables
 ENV PORT=8000
-ENV DATABASE_URL=sqlite:///./backend/pothole_detector.db
+ENV DATABASE_URL=sqlite:///./pothole_detector.db
 ENV UPLOAD_DIR=backend/data/uploads
 ENV MODEL_PATH=weights/yolov8n.pt
 ENV PYTHONPATH=/app
