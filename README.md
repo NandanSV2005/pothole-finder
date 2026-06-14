@@ -15,7 +15,7 @@ pinned: false
 <!-- Record a 30-45 second screen capture of: upload an image → detection runs → annotated result appears → marker shows on map → heatmap updates -->
 <!-- Use LICEcap (Windows/Mac) or Peek (Linux) to record. Drop the .gif file into /assets/demo.gif and replace this comment with: ![Demo](assets/demo.gif) -->
 
-**Live Demo:** [Hugging Face Spaces](https://huggingface.co/spaces/NandanSV/RoadSense) | **Video Walkthrough:** [YouTube/Loom link if recorded]
+**Live link:** [Render Link](https://pothole-finder.onrender.com)
 
 ---
 
