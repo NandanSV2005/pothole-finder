@@ -32,6 +32,9 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy backend application source
 COPY backend/ ./backend/
 
+# Copy pre-downloaded weights
+COPY weights/ ./weights/
+
 # Copy compiled frontend from Stage 1 into the project folder
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 

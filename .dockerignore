@@ -1,11 +1,15 @@
-# Node / Frontend
-node_modules
-dist
-.svelte-kit
-.next
-.nuxt
+# Version control and editor state
+.git
+.github
+.vscode
+.idea
 
-# Python / Backend
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Python environments and caches
 venv
 .venv
 __pycache__
@@ -13,19 +17,30 @@ __pycache__
 *.pyo
 *.pyd
 .pytest_cache
+.mypy_cache
+.ruff_cache
 
-# Databases
-*.db
-*.sqlite
+# Frontend dependencies and generated builds
+frontend/node_modules
+frontend/dist
+frontend/.vite
+node_modules
+dist
 
-# Local Environment Variables & IDEs
-.env
-.env.local
-.vscode
-.idea
-.git
-.github
-
-# Uploads & Temp
+# Runtime data created locally
+backend/*.db
+!backend/pothole_detector.db
+backend/*.sqlite
 backend/data/uploads/*
-!backend/data/uploads/.gitkeep
+!backend/data/uploads/seeded_*
+data
+
+# Model weights (uncomment if you want to force download at runtime, 
+# but keeping them included makes the deployment self-contained and fast)
+# weights
+# *.pt
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
