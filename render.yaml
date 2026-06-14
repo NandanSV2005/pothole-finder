@@ -5,7 +5,7 @@ services:
     plan: free
     envVars:
       - key: DATABASE_URL
-        value: sqlite:///./backend/pothole_detector.db
+        value: sqlite:///./pothole_detector.db
       - key: UPLOAD_DIR
         value: backend/data/uploads
       - key: MODEL_PATH
