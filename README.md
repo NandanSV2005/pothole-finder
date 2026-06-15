@@ -1,13 +1,6 @@
----
-title: RoadSense
-emoji: 🛣️
-colorFrom: blue
-colorTo: red
-sdk: docker
-pinned: false
----
+# RoadSense: Pothole & Road Damage Detection System
 
-# 🚧 PotholeAI — Smart Road Damage Detection & Civic Intelligence Platform
+RoadSense is a production-ready, full-stack civic technology application designed to detect, classify, log, and map road anomalies (potholes, cracks, waterlogging, and road collapses) across Bengaluru. It features a YOLOv8-powered ML pipeline, a FastAPI backend with SQLite database tracking, and a premium React Leaflet map dashboard for municipal analytics and citizens report filing.
 
 > Real-time road damage detection, severity triage, and civic reporting — powered by YOLOv8 and built for Indian roads.
 
@@ -85,11 +78,11 @@ PotholeAI bridges the gap between active citizen reporting and municipal road in
 
 ---
 
-## Architecture
+## == ARCHITECTURE DIAGRAM ==
 
 ```
 +-------------------------------------------------------------------------+
-|                          POTHOLEAI CIVIC TECH                           |
+|                          ROADSENSE CIVIC TECH                           |
 +-------------------------------------------------------------------------+
                                      |
                                      v
@@ -114,41 +107,43 @@ PotholeAI bridges the gap between active citizen reporting and municipal road in
 
 ---
 
+## Key Features
+
+1. **AI Inference Pipeline**: Processes JPG/PNG uploads through a pre-trained or custom YOLOv8n model, returning annotations drawn dynamically by OpenCV.
+2. **Geospatial Logging**: Extracts GPS coordinates via browser Geolocation API on submission, reverse-geocoding them into human-readable Indian postal addresses using `geopy` (OSM Nominatim).
+3. **Interactive Civic Dashboard**: Features a dark-themed Leaflet.js map tracking incident pins color-coded by type. Popups exhibit address data, timestamps, verification statuses, and thumbnail crops.
+4. **Summary Sidebar**: Showcases aggregate telemetry including today's reports count, categories list, and regional hotspot highlights.
+5. **PDF Report Compilation**: Generates a downloadable ReportLab PDF containing executive summary tables, custom vector charts of incident density in Bengaluru, and incident lists.
+6. **Robust Error Handling**: Standardizes all server and inference exceptions into clean `{error: string, code: string, suggestion: string}` responses.
+
+---
+
 ## Technology Stack
 
-- **ML Layer**: Python 3.11, Ultralytics YOLOv8, OpenCV, PyTorch.
-- **Backend Service**: FastAPI, SQLAlchemy ORM, Uvicorn, SQLite Database, Geopy (OpenStreetMap Nominatim API).
-- **Frontend App**: React 19 (TypeScript), Vite, Tailwind CSS, Leaflet.js & React Leaflet.
-- **PDF Engine**: ReportLab.
-- **PWA Configuration**: Custom service worker, web manifest configuration.
-- **Containerization**: Docker, Docker-compose (compatible with Hugging Face Spaces and Render).
+- **ML Layer**: Python 3.11/3.14, Ultralytics YOLOv8, OpenCV, PyTorch.
+- **Backend**: FastAPI, Uvicorn, SQLite database, SQLAlchemy ORM.
+- **Frontend**: React 19 (TypeScript), Vite, Tailwind CSS, Leaflet.js / React Leaflet.
+- **Reporting**: ReportLab PDF.
+- **Containerization**: Docker, Docker-compose (Hugging Face Spaces compatible).
 
 ---
 
 ## API Documentation
 
 ### Public / Citizens Routes
-* `POST /api/detect` - Process upload image, run YOLOv8, reverse-geocode coordinates, and save to DB.
-  * Form Data: `file: UploadFile`, `lat: float` (optional), `lng: float` (optional).
-* `POST /api/detections/video` - Process dashcam video frame-by-frame, interpolate route coordinates, and log incidents.
-  * Form Data: `file: UploadFile`, `frame_interval: int` (default `10`), `lat: float` (optional), `lng: float` (optional).
-* `POST /api/detections/compare` - Runs SSIM and YOLOv8 on before/after photos at the same coordinates.
-  * Form Data: `image_before: UploadFile`, `image_after: UploadFile`.
-* `GET /api/detections` - Retrieves a paginated history of reports.
-  * Query parameters: `page`, `limit`, `damage_class`, `area`, `min_confidence`, `start_date`, `end_date`.
-* `GET /api/detections/{id}` - Fetch details for a specific case.
-* `POST /api/detections/{id}/flag` - Flag a detection as incorrect (correction loop).
-* `GET /api/stats` - Retrieve summary dashboard telemetry.
-* `GET /api/stats/analytics` - Fetch aggregate confidence charts, FP rates, and 30-day precision trends.
-* `GET /api/report` - Compiles and streams a downloadable PDF quality report.
-  * Query parameters: `start_date`, `end_date` (optional).
+* `POST /api/detect`: Process upload image, run YOLOv8, reverse-geocode coordinates, and save to DB.
+* `POST /api/compare`: Automatic Before/After change detection. Upload a new road photo with GPS coordinates to find and compare nearby prior reports.
+* `GET  /api/detections`: Retrieve paginated history of reports. Supports filters: `damage_class`, `area`, `min_confidence`, `start_date`, `end_date`.
+* `GET  /api/detections/{id}`: Fetch details for a specific case.
+* `GET  /api/stats`: Retrieve summary aggregates for today's dashboard metrics.
+* `GET  /api/report`: Compile and download a print-ready PDF summary of logs.
 
 ### Administrator / Verification Routes (Requires Bearer JWT)
-* `POST /api/auth/register` - Register a new citizen or administrator.
-* `POST /api/auth/login` - Authenticate credentials and return JWT access token.
-* `GET /api/auth/me` - Validate session token and check roles.
-* `POST /api/detections/{id}/verify` - Mark an incident as officially verified.
-* `DELETE /api/detections/{id}` - Delete an entry and prune associated files.
+* `POST   /api/auth/register`: Create a new citizen or administrator profile.
+* `POST   /api/auth/login`: Authenticate credentials, returning access token.
+* `GET    /api/auth/me`: Validate session token and check roles.
+* `POST   /api/detections/{id}/verify`: Mark an incident as officially verified.
+* `DELETE /api/detections/{id}`: Delete an entry and prune associated files.
 
 ---
 
@@ -166,23 +161,20 @@ PotholeAI bridges the gap between active citizen reporting and municipal road in
 ### Option 2: Local Manual Setup (Development Mode)
 
 #### 1. Backend Setup
-1. Navigate to the backend folder:
+1. Open a terminal and navigate to the backend folder:
    ```bash
    cd backend
    ```
 2. Create and activate a Python virtual environment:
    ```bash
    py -m venv venv
-   # On Windows:
    .\venv\Scripts\activate
-   # On macOS/Linux:
-   source venv/bin/activate
    ```
 3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-4. Copy the environment variables:
+4. Copy the environment template:
    ```bash
    copy .env.example .env
    ```
@@ -194,7 +186,7 @@ PotholeAI bridges the gap between active citizen reporting and municipal road in
    ```bash
    python -m uvicorn main:app --reload --port 8000
    ```
-   * *Swagger interactive documentation: `http://localhost:8000/docs`*
+   * *Swagger documentation: `http://localhost:8000/docs`*
 
 #### 2. Frontend Setup
 1. Open a new terminal and navigate to the frontend folder:
@@ -203,7 +195,7 @@ PotholeAI bridges the gap between active citizen reporting and municipal road in
    ```
 2. Install npm packages:
    ```bash
-   npm install --legacy-peer-deps
+   npm install --legacy-peer-deps 
    ```
 3. Boot the Vite React development server:
    ```bash
@@ -237,3 +229,12 @@ If you have custom road damage datasets (e.g. RDD2020) formatted in the standard
    python backend/ml/train.py --data dataset/data.yaml --epochs 50 --batch 16 --imgsz 640 --base yolov8n.pt
    ```
 3. Copy the compiled weights `road_damage_model/weights/best.pt` to `weights/yolov8_road_damage.pt` and update your backend `.env` variables.
+
+---
+
+## Hugging Face Spaces Deployment Template
+This repository is configured to be uploaded directly to Hugging Face Spaces as a Docker template:
+1. Create a new Space on Hugging Face.
+2. Select **Docker** as the SDK and choose the blank/custom template.
+3. Configure the Space's port to run on `8000` or set `EXPOSE 8000` in settings.
+4. Git push the repository contents directly. Hugging Face will trigger the multi-stage build, compiling the React assets, setting up PyTorch, and serving the app from the container.

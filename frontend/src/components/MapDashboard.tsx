@@ -53,6 +53,15 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// Custom helper component to center and animate map viewpoint changes
+const ChangeMapView: React.FC<{ center: [number, number]; zoom: number }> = ({ center, zoom }) => {
+  const map = useMap();
+  useEffect(() => {
+    map.flyTo(center, zoom, { duration: 1.5 });
+  }, [map, center, zoom]);
+  return null;
+};
+
 // Custom pulsing colored severity markers (Green / Orange / Red)
 const createSeverityIcon = (severity: string) => {
   const colorMap: Record<string, string> = {
@@ -83,6 +92,27 @@ const MapDashboard: React.FC<MapDashboardProps> = ({ detections }) => {
   const defaultPosition: [number, number] = [12.9716, 77.5946]; // Bengaluru Majestic Center
   const [mapView, setMapView] = useState<'pins' | 'heatmap'>('pins');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  
+  // Coordinate centering and zoom state
+  const [center, setCenter] = useState<[number, number]>(defaultPosition);
+  const [zoom, setZoom] = useState<number>(12);
+
+  // Monitor localStorage for map flying triggers
+  useEffect(() => {
+    const target = localStorage.getItem('map_center_target');
+    if (target) {
+      try {
+        const { lat, lng } = JSON.parse(target);
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          setCenter([lat, lng]);
+          setZoom(16);
+        }
+      } catch (e) {
+        console.error("Failed to parse map center target:", e);
+      }
+      localStorage.removeItem('map_center_target');
+    }
+  }, []);
 
   // Filter detections by timestamp
   const getFilteredDetections = () => {
@@ -154,8 +184,8 @@ const MapDashboard: React.FC<MapDashboardProps> = ({ detections }) => {
       {/* Main Map */}
       <div className="flex-1 w-full h-full">
         <MapContainer
-          center={defaultPosition}
-          zoom={12}
+          center={center}
+          zoom={zoom}
           className="w-full h-full"
           scrollWheelZoom={true}
         >
@@ -163,6 +193,8 @@ const MapDashboard: React.FC<MapDashboardProps> = ({ detections }) => {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          <ChangeMapView center={center} zoom={zoom} />
+
 
           {mapView === 'pins' &&
             filteredDetections.map((det) => {

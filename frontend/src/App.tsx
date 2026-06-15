@@ -20,7 +20,7 @@ const AppContent: React.FC = () => {
       case 'dashboard': return <DashboardPage />;
       case 'upload': return <UploadPage />;
       case 'video': return <VideoUploadPage />;
-      case 'compare': return <ComparePage />;
+      case 'compare': return <ComparePage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'history': return <HistoryPage />;
       case 'analytics': return <AnalyticsPage />;
       case 'report': return <ReportPage />;

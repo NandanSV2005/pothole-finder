@@ -3,7 +3,7 @@ SQLAlchemy models for User and Detection.
 """
 
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey
 from backend.database import Base
 
 class User(Base):
@@ -34,3 +34,6 @@ class Detection(Base):
     is_verified = Column(Boolean, default=False, nullable=False) # Verified by admin
     severity = Column(String, default="minor", nullable=False) # minor, moderate, critical
     is_incorrect = Column(Boolean, default=False, nullable=False) # Flagged as incorrect by users
+    is_baseline = Column(Boolean, default=False, nullable=False)
+    compared_to_detection_id = Column(Integer, ForeignKey("detections.id"), nullable=True)
+

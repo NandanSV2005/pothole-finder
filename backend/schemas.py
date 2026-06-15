@@ -104,3 +104,20 @@ class ErrorResponse(BaseModel):
     error: str
     code: str
     suggestion: str
+
+class CompareResponse(BaseModel):
+    status: str
+    new_detection_id: str
+    prior_detection_id: Optional[str] = None
+    prior_detection_date: Optional[str] = None
+    distance_metres: Optional[float] = None
+    location_confidence: Optional[str] = None
+    ssim_score: Optional[float] = None
+    verdict: str
+    verdict_explanation: str
+    old_image_url: Optional[str] = None
+    new_image_url: str
+    prior_detection_address: Optional[str] = None
+    new_detection_address: str
+    prior_detection_severity: Optional[str] = None
+

@@ -1,7 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AxiosError } from 'axios';
-import { Upload, GitCompare, Eye, AlertCircle, ArrowRight, ShieldAlert } from 'lucide-react';
-import api from '../api';
+import { Upload, GitCompare, AlertCircle, CheckCircle2, Navigation } from 'lucide-react';
+import api, { API_BASE_URL } from '../api';
+
+interface ComparePageProps {
+  onNavigate: (tab: 'dashboard' | 'upload' | 'video' | 'compare' | 'history' | 'analytics' | 'report' | 'login') => void;
+}
 
 interface ApiErrorResponse {
   detail?: {
@@ -11,211 +15,471 @@ interface ApiErrorResponse {
 }
 
 interface CompareResult {
-  success: boolean;
-  ssim: number;
-  status: string;
-  detections_before: number;
-  detections_after: number;
-  comparison_image_base64: string;
+  status: 'compared' | 'baseline_saved';
+  new_detection_id: string;
+  prior_detection_id: string | null;
+  prior_detection_date: string | null;
+  distance_metres: number | null;
+  location_confidence: 'high' | 'medium' | 'low' | null;
+  ssim_score: number | null;
+  verdict: 'repaired' | 'worsened' | 'unchanged' | 'new_baseline' | 'prior_image_unavailable';
+  verdict_explanation: string;
+  old_image_url: string | null;
+  new_image_url: string;
+  prior_detection_address: string | null;
+  new_detection_address: string;
+  prior_detection_severity: string | null;
 }
 
-const ComparePage: React.FC = () => {
-  const [fileBefore, setFileBefore] = useState<File | null>(null);
-  const [fileAfter, setFileAfter] = useState<File | null>(null);
-  const [previewBefore, setPreviewBefore] = useState<string | null>(null);
-  const [previewAfter, setPreviewAfter] = useState<string | null>(null);
-  
+const ComparePage: React.FC<ComparePageProps> = ({ onNavigate }) => {
+  const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<{ error: string; suggestion: string } | null>(null);
 
-  const fileInputBeforeRef = useRef<HTMLInputElement>(null);
-  const fileInputAfterRef = useRef<HTMLInputElement>(null);
+  // GPS Coordinates and Permission State
+  const [gpsActive, setGpsActive] = useState<boolean>(false);
+  const [gpsLoading, setGpsLoading] = useState<boolean>(true);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  const selectBefore = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    setFileBefore(file);
-    setPreviewBefore(URL.createObjectURL(file));
-    setResult(null);
-    setErrorMsg(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check and request GPS location
+  const checkGeolocation = () => {
+    setGpsLoading(true);
+    if (!navigator.geolocation) {
+      setGpsActive(false);
+      setGpsLoading(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setGpsActive(true);
+        setGpsLoading(false);
+      },
+      (error) => {
+        console.warn('Geolocation access failed:', error);
+        setGpsActive(false);
+        setGpsLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
   };
 
-  const selectAfter = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    setFileAfter(file);
-    setPreviewAfter(URL.createObjectURL(file));
-    setResult(null);
-    setErrorMsg(null);
-  };
+  useEffect(() => {
+    checkGeolocation();
+  }, []);
 
-  const handleCompare = async (e: React.FormEvent) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    if (!fileBefore || !fileAfter) return;
+    setDragActive(true);
+  };
+
+  const handleDragLeave = () => {
+    setDragActive(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileUpload(e.target.files[0]);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setErrorMsg({
+        error: 'Unsupported file type.',
+        suggestion: 'Please upload a valid JPEG or PNG image.',
+      });
+      return;
+    }
+
+    // Verify file size limit (10MB)
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setErrorMsg({
+        error: 'File size exceeds 10MB limit.',
+        suggestion: 'Please optimize the photo or pick a smaller file.',
+      });
+      return;
+    }
+
+    // Verify coordinates are present
+    if (!gpsActive || !coords) {
+      setErrorMsg({
+        error: 'Location access is required for automatic comparison.',
+        suggestion: 'Please enable GPS/location services in your browser settings and try again.',
+      });
+      return;
+    }
 
     setLoading(true);
     setErrorMsg(null);
     setResult(null);
 
+    // Run sequential loader message updates
+    setLoadingMessage('Searching records within 50m...');
+    const timer = setTimeout(() => {
+      setLoadingMessage('Running comparison...');
+    }, 800);
+
     const formData = new FormData();
-    formData.append('image_before', fileBefore);
-    formData.append('image_after', fileAfter);
+    formData.append('new_image', file);
+    formData.append('lat', coords.lat.toString());
+    formData.append('lng', coords.lng.toString());
 
     try {
-      const response = await api.post('/api/detections/compare', formData, {
+      const response = await api.post('/api/compare', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      if (response.data.success) {
-        setResult(response.data);
-      }
+      setResult(response.data);
     } catch (err: unknown) {
       console.error(err);
       const axiosError = err as AxiosError<ApiErrorResponse>;
       const errDetail = axiosError.response?.data?.detail;
       setErrorMsg({
-        error: errDetail?.error || 'Comparison failed.',
-        suggestion: errDetail?.suggestion || 'Please make sure both files are valid JPEG/PNG formats.'
+        error: errDetail?.error || 'Comparison analysis failed.',
+        suggestion: errDetail?.suggestion || 'Confirm server is running and try again.',
       });
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   };
 
-  const statusColors = (statusStr: string) => {
-    const s = statusStr.toLowerCase();
-    if (s.includes('repaired')) return 'bg-emerald-950/40 text-emerald-400 border-emerald-900/40 shadow-emerald-950/20';
-    if (s.includes('worsened')) return 'bg-red-950/40 text-red-400 border-red-900/40 shadow-red-950/20';
-    return 'bg-amber-950/40 text-amber-400 border-amber-900/40 shadow-amber-950/20';
+  // Redirection: Center on map
+  const handleViewOnMap = () => {
+    if (!coords) return;
+    
+    // Save target coordinates of the uploaded image
+    localStorage.setItem('map_center_target', JSON.stringify({
+      lat: coords.lat,
+      lng: coords.lng
+    }));
+    
+    // Fly to dashboard tab
+    onNavigate('dashboard');
+  };
+
+  // Render color styling for Verdict
+  const getVerdictBadgeStyles = (verdict: string) => {
+    switch (verdict.toLowerCase()) {
+      case 'repaired':
+        return 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/80';
+      case 'unchanged':
+        return 'bg-amber-950/60 text-amber-400 border border-amber-800/80';
+      case 'worsened':
+        return 'bg-red-950/60 text-red-400 border border-red-850/80';
+      default:
+        return 'bg-slate-800/80 text-slate-300 border border-slate-700';
+    }
+  };
+
+  const getSeverityBadgeStyles = (severity: string | null) => {
+    if (!severity) return 'hidden';
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return 'bg-red-950/80 text-red-400 border border-red-900/40 text-[9px] font-bold px-1.5 py-0.5 rounded';
+      case 'moderate':
+        return 'bg-orange-950/80 text-orange-400 border border-orange-900/40 text-[9px] font-bold px-1.5 py-0.5 rounded';
+      default:
+        return 'bg-green-950/80 text-green-400 border border-green-900/40 text-[9px] font-bold px-1.5 py-0.5 rounded';
+    }
+  };
+
+  const getConfidenceBadgeStyles = (conf: string | null) => {
+    if (!conf) return 'hidden';
+    switch (conf.toLowerCase()) {
+      case 'high':
+        return 'bg-emerald-950 text-emerald-400 border border-emerald-900/30 text-[10px] font-bold px-2 py-0.5 rounded';
+      case 'medium':
+        return 'bg-amber-950 text-amber-400 border border-amber-900/30 text-[10px] font-bold px-2 py-0.5 rounded';
+      default:
+        return 'bg-red-950 text-red-400 border border-red-900/30 text-[10px] font-bold px-2 py-0.5 rounded';
+    }
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 py-4">
+      {/* Header */}
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
-          <GitCompare className="w-8 h-8 text-brand-500" /> Before/After Change Detection
+          <GitCompare className="w-8 h-8 text-brand-500" /> Automatic Change Detection
         </h1>
         <p className="text-sm text-slate-400 max-w-xl mx-auto">
-          Assess road repairs and deterioration over time by comparing two images of the same location.
+          Audit road repair workflows automatically. Upload a photo and we will scan past logs within 50m to compare surface conditions.
         </p>
       </div>
 
+      {/* Info Banner */}
+      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 text-center">
+        <p className="text-xs text-slate-300">
+          💡 <span className="font-semibold text-white">How it works:</span> Upload a new photo of a road location. We'll automatically check our records for prior damage reports nearby and compare them for you.
+        </p>
+      </div>
+
+      {/* Main interaction card */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-        <form onSubmit={handleCompare} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Before Upload Zone */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wide">1. Before Image (Earlier timestamp)</label>
-              <div
-                className={`border-2 border-dashed rounded-xl p-6 text-center transition cursor-pointer flex flex-col items-center justify-center min-h-[180px] ${
-                  previewBefore ? 'border-brand-900 bg-slate-950/30' : 'border-slate-800 bg-slate-950/50 hover:border-slate-700'
-                }`}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files?.[0]) selectBefore(e.dataTransfer.files[0]); }}
-                onClick={() => fileInputBeforeRef.current?.click()}
-              >
-                <input ref={fileInputBeforeRef} type="file" className="hidden" accept="image/*" onChange={(e) => { if (e.target.files?.[0]) selectBefore(e.target.files[0]); }} />
-                {previewBefore ? (
-                  <div className="space-y-2">
-                    <img src={previewBefore} alt="Before" className="max-h-[140px] rounded border border-slate-800 object-contain mx-auto" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-[200px]">{fileBefore?.name}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Upload className="w-8 h-8 text-slate-600 mx-auto" />
-                    <p className="text-xs font-semibold text-white">Upload Before Image</p>
-                    <p className="text-[10px] text-slate-500">Drag & Drop image here</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* After Upload Zone */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wide">2. After Image (Later timestamp)</label>
-              <div
-                className={`border-2 border-dashed rounded-xl p-6 text-center transition cursor-pointer flex flex-col items-center justify-center min-h-[180px] ${
-                  previewAfter ? 'border-brand-900 bg-slate-950/30' : 'border-slate-800 bg-slate-950/50 hover:border-slate-700'
-                }`}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files?.[0]) selectAfter(e.dataTransfer.files[0]); }}
-                onClick={() => fileInputAfterRef.current?.click()}
-              >
-                <input ref={fileInputAfterRef} type="file" className="hidden" accept="image/*" onChange={(e) => { if (e.target.files?.[0]) selectAfter(e.target.files[0]); }} />
-                {previewAfter ? (
-                  <div className="space-y-2">
-                    <img src={previewAfter} alt="After" className="max-h-[140px] rounded border border-slate-800 object-contain mx-auto" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-[200px]">{fileAfter?.name}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Upload className="w-8 h-8 text-slate-600 mx-auto" />
-                    <p className="text-xs font-semibold text-white">Upload After Image</p>
-                    <p className="text-[10px] text-slate-500">Drag & Drop image here</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-center pt-2">
-            <button
-              type="submit"
-              disabled={!fileBefore || !fileAfter || loading}
-              className="px-8 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition flex items-center gap-2 shadow-lg shadow-brand-950/20"
-            >
-              {loading ? "Comparing Images..." : "Analyze Quality Changes"}
-            </button>
-          </div>
-        </form>
-
-        {errorMsg && (
-          <div className="bg-red-950/40 border border-red-800/80 rounded-xl p-4 flex gap-3 text-red-200">
-            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-400" />
+        {/* GPS Banner */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-850">
+          <div className="flex items-center gap-2">
+            <span className={`w-3 h-3 rounded-full shrink-0 ${gpsActive ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
             <div>
-              <h4 className="font-bold text-sm">Comparison Error</h4>
-              <p className="text-xs text-red-300 mt-0.5">{errorMsg.error}</p>
-              <p className="text-xs text-slate-400 mt-1 font-mono font-medium">Tip: {errorMsg.suggestion}</p>
+              <span className="text-xs font-bold text-white uppercase tracking-wider block">
+                {gpsActive ? 'GPS Signal Connected' : 'GPS Location Required'}
+              </span>
+              <p className="text-[11px] text-slate-400">
+                {gpsActive 
+                  ? `Active coordinates: ${coords?.lat.toFixed(5)}, ${coords?.lng.toFixed(5)}`
+                  : 'Enable location access in your browser to use this feature.'
+                }
+              </p>
+            </div>
+          </div>
+          {!gpsActive && (
+            <button
+              onClick={checkGeolocation}
+              disabled={gpsLoading}
+              className="text-[10px] bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded transition uppercase border border-slate-700"
+            >
+              {gpsLoading ? 'Checking...' : 'Retry GPS'}
+            </button>
+          )}
+        </div>
+
+        {/* Drag-Drop Zone */}
+        {!loading && (
+          <div
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition cursor-pointer flex flex-col items-center justify-center min-h-[180px] ${
+              dragActive ? 'border-brand-500 bg-slate-800/30' : 'border-slate-800 bg-slate-950/30 hover:border-slate-700'
+            } ${!gpsActive ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => gpsActive && fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={handleFileChange}
+              disabled={!gpsActive}
+            />
+            <div className="space-y-2.5">
+              <Upload className="w-10 h-10 text-slate-500 mx-auto" />
+              <div>
+                <p className="text-sm font-semibold text-white">Drag & drop location photo here</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">JPEG, PNG formats accepted (Max 10MB)</p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Comparison Result Display */}
-        {result && (
+        {/* Loading State */}
+        {loading && (
+          <div className="py-12 text-center space-y-4">
+            <div className="w-10 h-10 border-4 border-slate-700 border-t-brand-500 rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-semibold text-slate-300 font-mono tracking-wider animate-pulse">
+              {loadingMessage}
+            </p>
+          </div>
+        )}
+
+        {/* Error Output */}
+        {errorMsg && (
+          <div className="bg-red-950/40 border border-red-800/80 rounded-xl p-4 flex gap-3 text-red-200">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-400" />
+            <div>
+              <h4 className="font-bold text-sm">{errorMsg.error}</h4>
+              <p className="text-xs text-red-300 mt-0.5">{errorMsg.suggestion}</p>
+            </div>
+          </div>
+        )}
+
+        {/* STATE A: compared */}
+        {result && result.status === 'compared' && (
           <div className="space-y-6 pt-4 border-t border-slate-800 animate-fadeIn">
-            {/* Status card */}
-            <div className={`border rounded-2xl p-5 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 ${statusColors(result.status)}`}>
-              <div className="flex items-center gap-3">
-                <ShieldAlert className="w-6 h-6 animate-pulse shrink-0" />
-                <div>
-                  <h3 className="font-extrabold text-sm uppercase tracking-wider">Change Status</h3>
-                  <p className="text-base font-extrabold mt-0.5">{result.status}</p>
+            {/* Side by side layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+              {/* Then Card */}
+              <div className="bg-slate-950 border border-slate-850 rounded-xl overflow-hidden p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-850 pb-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Then (Prior Report)</span>
+                  {result.prior_detection_severity && (
+                    <span className={getSeverityBadgeStyles(result.prior_detection_severity)}>
+                      {result.prior_detection_severity.toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                {result.old_image_url ? (
+                  <div className="rounded-lg overflow-hidden border border-slate-850 bg-slate-900 h-48 flex items-center justify-center">
+                    <img 
+                      src={`${API_BASE_URL}${result.old_image_url}`} 
+                      alt="Prior road condition" 
+                      className="max-h-full max-w-full object-cover" 
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-850 bg-slate-900/50 h-48 flex flex-col items-center justify-center text-slate-500">
+                    <AlertCircle className="w-8 h-8 mb-1" />
+                    <span className="text-xs">Image File Missing</span>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Reported Date</span>
+                  <span className="text-xs text-white font-mono">
+                    {result.prior_detection_date 
+                      ? new Date(result.prior_detection_date).toLocaleString() 
+                      : 'N/A'
+                    }
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Address</span>
+                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed h-8">
+                    {result.prior_detection_address || 'N/A'}
+                  </p>
                 </div>
               </div>
-              
-              <div className="flex gap-4 border-t border-slate-800/20 md:border-t-0 md:border-l pl-0 md:pl-6 pt-3 md:pt-0 w-full md:w-auto items-center">
-                <div className="text-center px-4">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">SSIM Index</span>
-                  <span className="block font-mono text-lg font-bold text-white mt-0.5">{result.ssim.toFixed(4)}</span>
+
+              {/* Center Badge overlay for Larger Screens */}
+              {result.verdict !== 'prior_image_unavailable' && (
+                <div className="hidden md:flex absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                  <div className={`px-4 py-2 rounded-full font-black text-xs uppercase tracking-widest shadow-2xl ${getVerdictBadgeStyles(result.verdict)}`}>
+                    {result.verdict}
+                  </div>
                 </div>
-                <div className="text-center px-4 border-l border-slate-800/20">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Detections</span>
-                  <span className="block font-mono text-sm font-semibold text-slate-200 mt-0.5 flex items-center gap-1 justify-center">
-                    {result.detections_before} <ArrowRight className="w-3.5 h-3.5 text-slate-500" /> {result.detections_after}
+              )}
+
+              {/* Now Card */}
+              <div className="bg-slate-950 border border-slate-850 rounded-xl overflow-hidden p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-850 pb-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Now (Current Photo)</span>
+                  <span className="bg-brand-950/80 text-brand-400 border border-brand-900/40 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">
+                    YOLO Annotated
                   </span>
+                </div>
+                <div className="rounded-lg overflow-hidden border border-slate-850 bg-slate-900 h-48 flex items-center justify-center">
+                  <img 
+                    src={`${API_BASE_URL}${result.new_image_url}`} 
+                    alt="Current road condition" 
+                    className="max-h-full max-w-full object-cover" 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Analysis Date</span>
+                  <span className="text-xs text-white font-mono">
+                    {new Date().toLocaleString()}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Address</span>
+                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed h-8">
+                    {result.new_detection_address}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Concatenated Image Render */}
-            <div className="space-y-3">
-              <h4 className="font-bold text-white text-xs flex items-center gap-1.5 uppercase tracking-wider">
-                <Eye className="w-4 h-4 text-emerald-400" /> Side-by-Side Verification Frame
-              </h4>
-              <div className="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 p-2 shadow-2xl">
-                <img
-                  src={result.comparison_image_base64}
-                  alt="Side by side comparison result"
-                  className="w-full h-auto object-contain rounded-lg"
+            {/* Mobile-only verdict banner */}
+            <div className="md:hidden block text-center py-2">
+              <span className={`px-4 py-2 rounded-full font-black text-xs uppercase tracking-widest inline-block ${getVerdictBadgeStyles(result.verdict)}`}>
+                Verdict: {result.verdict}
+              </span>
+            </div>
+
+            {/* Telemetry data info */}
+            <div className="bg-slate-950 border border-slate-850 rounded-xl p-5 space-y-4">
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Analysis Findings</h4>
+                <p className="text-sm font-semibold text-white leading-relaxed">
+                  {result.verdict_explanation}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-900 pt-4 text-xs">
+                <div className="space-y-1">
+                  <span className="text-slate-500 uppercase tracking-wider font-bold text-[10px] block">Location Verification</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-white font-semibold">
+                      Distance: {result.distance_metres !== null ? `${result.distance_metres}m` : 'N/A'}
+                    </span>
+                    {result.location_confidence && (
+                      <span className={getConfidenceBadgeStyles(result.location_confidence)}>
+                        {result.location_confidence.toUpperCase()} CONFIDENCE
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {result.ssim_score !== null && (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between font-bold text-[10px] text-slate-500 uppercase tracking-wider">
+                      <span>Surface Similarity Score</span>
+                      <span className="text-white font-mono">{Math.round(result.ssim_score * 100)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+                      <div 
+                        className={`h-full rounded-full ${
+                          result.verdict === 'repaired' ? 'bg-emerald-500' :
+                          result.verdict === 'unchanged' ? 'bg-amber-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.round(result.ssim_score * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STATE B: baseline_saved */}
+        {result && result.status === 'baseline_saved' && (
+          <div className="space-y-6 pt-4 border-t border-slate-800 animate-fadeIn">
+            <div className="bg-slate-950 border border-slate-850 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="rounded-lg overflow-hidden border border-slate-850 bg-slate-900 max-h-[250px] flex items-center justify-center">
+                <img 
+                  src={`${API_BASE_URL}${result.new_image_url}`} 
+                  alt="New baseline report" 
+                  className="max-h-full max-w-full object-cover" 
                 />
+              </div>
+
+              <div className="space-y-4">
+                {/* Green info box */}
+                <div className="bg-emerald-950/40 border border-emerald-900/40 rounded-xl p-4 text-emerald-200 flex gap-3">
+                  <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold text-sm">New Location Tracked</h4>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      This is now the baseline for <span className="text-white font-semibold">{result.new_detection_address}</span>. Future uploads here will be compared against this report.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleViewOnMap}
+                  className="w-full py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg shadow-brand-950/20"
+                >
+                  <Navigation className="w-4 h-4 fill-white" />
+                  View on Map
+                </button>
               </div>
             </div>
           </div>
