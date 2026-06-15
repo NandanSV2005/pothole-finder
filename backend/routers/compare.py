@@ -112,7 +112,7 @@ def save_detections_to_db(
                 address=address,
                 damage_class=det["class"],
                 confidence=det["confidence"],
-                image_path=f"/static/uploads/{annotated_filename}",
+                image_path=f"/static/detections/{annotated_filename}",
                 is_verified=False,
                 severity=det.get("severity", "minor"),
                 is_incorrect=False,
@@ -131,7 +131,7 @@ def save_detections_to_db(
             address=address,
             damage_class="none",
             confidence=1.0,
-            image_path=f"/static/uploads/{annotated_filename}",
+            image_path=f"/static/detections/{annotated_filename}",
             is_verified=False,
             severity="minor",
             is_incorrect=False,
@@ -144,6 +144,7 @@ def save_detections_to_db(
         saved_records.append(db_detection)
         
     return saved_records[0]
+
 
 @router.post("", response_model=CompareResponse)
 async def compare_images(

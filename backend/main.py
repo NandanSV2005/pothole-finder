@@ -61,6 +61,8 @@ app.add_middleware(
 upload_dir = Path(os.getenv("UPLOAD_DIR", "backend/data/uploads"))
 upload_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
+app.mount("/static/detections", StaticFiles(directory=str(upload_dir)), name="detections")
+
 
 # ERROR HANDLING OVERRIDES
 # Requirement: All errors must return JSON {error: string, code: string, suggestion: string}
