@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/auth-context';
 import DashboardPage from './pages/DashboardPage';
@@ -9,9 +9,10 @@ import HistoryPage from './pages/HistoryPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ReportPage from './pages/ReportPage';
 import LoginPage from './pages/LoginPage';
+import Landing from './pages/Landing';
 import { Shield, Eye, Upload, Clock, FileDown, LogOut, User, Film, GitCompare, Cpu } from 'lucide-react';
 
-const AppContent: React.FC = () => {
+const AppContent: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
   const { user, logout } = useAuth();
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'upload' | 'video' | 'compare' | 'history' | 'analytics' | 'report' | 'login'>('dashboard');
 
@@ -44,7 +45,7 @@ const AppContent: React.FC = () => {
       {/* Premium Header */}
       <header className="border-b border-slate-900 bg-[#0c1017] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setCurrentTab('dashboard')}>
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onNavigate('/')}>
             <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center border border-brand-500 shadow-md">
               <Shield className="w-4.5 h-4.5 text-white" />
             </div>
@@ -120,10 +121,33 @@ const AppContent: React.FC = () => {
   );
 };
 
+const AppContentWrapper: React.FC = () => {
+  const [path, setPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateTo = (newPath: string) => {
+    window.history.pushState({}, '', newPath);
+    setPath(newPath);
+  };
+
+  if (path === '/') {
+    return <Landing onNavigate={navigateTo} />;
+  }
+
+  return <AppContent onNavigate={navigateTo} />;
+};
+
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <AppContentWrapper />
     </AuthProvider>
   );
 };
