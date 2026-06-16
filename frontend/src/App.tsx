@@ -133,11 +133,23 @@ const AppContentWrapper: React.FC = () => {
   }, []);
 
   const navigateTo = (newPath: string) => {
-    window.history.pushState({}, '', newPath);
-    setPath(newPath);
+    // Dynamically calculate base directory path for environments with nested directories (e.g. Hugging Face embeds)
+    const basePrefix = window.location.pathname
+      .replace(/\/dashboard\/?$/, '')
+      .replace(/\/index\.html$/, '')
+      .replace(/\/$/, '');
+      
+    const formattedPath = newPath.startsWith('/') ? newPath : `/${newPath}`;
+    const targetPath = `${basePrefix}${formattedPath}`;
+    
+    window.history.pushState({}, '', targetPath);
+    setPath(targetPath);
   };
 
-  if (path === '/') {
+  // If path contains '/dashboard', show the dashboard layout; otherwise, show the landing page
+  const isDashboard = path.includes('/dashboard');
+
+  if (!isDashboard) {
     return <Landing onNavigate={navigateTo} />;
   }
 
